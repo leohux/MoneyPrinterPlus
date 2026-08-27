@@ -63,6 +63,10 @@ resource:
     api_key: API_KEY
   pixabay:
     api_key: API_KEY
+  stableDiffusion:
+    server_address: http://127.0.0.1:7860
+    user_name: ""
+    password: ""
   provider: pexels
 ui:
   language: zh-CN

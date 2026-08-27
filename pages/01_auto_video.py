@@ -27,12 +27,16 @@ from config.config import my_config, save_config, languages, audio_languages, tr
     fade_list, audio_types, load_session_state_from_yaml, save_session_state_to_yaml, app_title, GPT_soVITS_languages, CosyVoice_voice
 from main import main_generate_video_content, main_generate_ai_video, main_generate_video_dubbing, \
     main_get_video_resource, main_generate_subtitle, main_try_test_audio, get_audio_voices, main_try_test_local_audio, \
-    main_generate_ai_video_from_img
+    main_generate_ai_video_from_img, export_video_for_publish, ensure_publish_session
 from pages.common import common_ui
+from services.publisher.publish_video import publish_file
 from services.sd.sd_service import SDService
 from tools.tr_utils import tr
 
 import os
+import threading
+
+from streamlit.runtime.scriptrunner import add_script_run_ctx
 
 from tools.utils import get_file_map_from_dir
 
@@ -131,29 +135,40 @@ with resource_container:
     resource_name = my_config['resource'].get('provider', '')
     st.text(tr("Using Resource:") + resource_name)
     if resource_name == "stableDiffusion":
-        sd_service = SDService()
-        sd_checkpoints = sd_service.get_checkpoints()
+        try:
+            sd_service = SDService()
+            sd_checkpoints = sd_service.get_checkpoints() or ["(请先启动 SD WebUI)"]
+            sd_samplers = sd_service.get_samples() or ["Euler a"]
+            sd_schedules = sd_service.get_schedulers() or ["automatic"]
+        except Exception as e:
+            st.warning(f"无法连接 Stable Diffusion，请检查基本配置中的地址: {e}")
+            sd_checkpoints = ["(请先启动 SD WebUI)"]
+            sd_samplers = ["Euler a"]
+            sd_schedules = ["automatic"]
         llm_columns = st.columns(4)
         with llm_columns[0]:
             st.selectbox(label=tr("Check Point"), options=sd_checkpoints,
                          key="sd_checkpoint")
         with llm_columns[1]:
-            st.slider(label=tr("Width"), min_value=64, max_value=2048, step=1, value=720, key="sd_width")
+            st.slider(label=tr("Width"), min_value=64, max_value=2048, step=64, value=720, key="sd_width")
         with llm_columns[2]:
-            st.slider(label=tr("Height"), min_value=64, max_value=2048, step=1, value=1280, key="sd_height")
+            st.slider(label=tr("Height"), min_value=64, max_value=2048, step=64, value=1280, key="sd_height")
         with llm_columns[3]:
-            st.text_input(label=tr("Seed"), value=2008, key="sd_seed")
+            st.text_input(label=tr("Seed"), value="-1", key="sd_seed",
+                          help="填 -1 表示随机种子")
         llm_columns = st.columns(4)
         with llm_columns[0]:
-            sd_samplers = sd_service.get_samples()
-            st.selectbox(label=tr("Sampler"), options=sd_samplers,  key="sd_sample")
+            st.selectbox(label=tr("Sampler"), options=sd_samplers, key="sd_sample")
         with llm_columns[1]:
-            sd_schedules = sd_service.get_schedulers()
-            st.selectbox(label=tr("Schedule"), options=sd_schedules,  key="sd_schedule")
+            st.selectbox(label=tr("Schedule"), options=sd_schedules, key="sd_schedule")
         with llm_columns[2]:
             st.slider(label=tr("Steps"), min_value=1, max_value=150, step=1, value=20, key="sd_step")
         with llm_columns[3]:
-            st.slider(label=tr("CFG Scale"), min_value=0.0, max_value=1.0, step=0.1, value=0.7, key="sd_cfg_scale")
+            st.slider(label=tr("CFG Scale"), min_value=1.0, max_value=30.0, step=0.5, value=7.0, key="sd_cfg_scale")
+        st.text_input(label="Negative Prompt",
+                      value="blurry, low quality, distorted, deformed, bad anatomy, watermark, text, logo",
+                      key="sd_negative_prompt")
+        st.info("选用 Stable Diffusion 后，将按文案分段自动生图并合成短视频。")
 
 # 配音区域
 captioning_container = st.container(border=True)
@@ -430,7 +445,29 @@ with subtitle_container:
 # 生成视频
 video_generator = st.container(border=True)
 with video_generator:
+    st.checkbox(
+        label="生成完成后自动发布到多平台",
+        key="auto_publish_after_generate",
+        value=False,
+        help="需先在「批量视频自动发布」页配置好浏览器调试地址，并保持 Chrome/Firefox 已登录各平台",
+    )
     st.button(label=tr("Generate Video Button"), type="primary", on_click=generate_video, args=(video_generator,))
 result_video_file = st.session_state.get("result_video_file")
 if result_video_file:
     st.video(result_video_file)
+    publish_video = st.session_state.get("publish_video_file")
+    publish_text = st.session_state.get("publish_text_file")
+    if publish_video:
+        st.success(f"发布素材已就绪：\n- 视频: `{publish_video}`\n- 文案: `{publish_text}`")
+
+    def start_publish_now():
+        if not st.session_state.get("publish_video_file"):
+            export_video_for_publish(result_video_file)
+        ensure_publish_session()
+        t = threading.Thread(target=publish_file)
+        add_script_run_ctx(t)
+        t.start()
+        st.toast("已启动多平台发布，请查看浏览器窗口", icon="🚀")
+
+    st.button(label="一键发布到多平台（抖音/快手/小红书/视频号/B站）", type="primary",
+              on_click=start_publish_now)

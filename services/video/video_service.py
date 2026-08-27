@@ -66,19 +66,21 @@ def get_audio_duration(audio_file):
     print(" ".join(cmd))
     result = subprocess.run(cmd, capture_output=True)
 
-    # 解析输出，找到时长信息
+    # 解析输出，找到时长信息（保留小数，避免配音和画面对不齐）
+    stderr_text = result.stderr.decode('utf-8', errors='ignore')
     duration_search = re.search(
-        r'Duration: (?P<hours>\d+):(?P<minutes>\d+):(?P<seconds>\d+)\.(?P<milliseconds>\d+)',
-        result.stderr.decode('utf-8'))
+        r'Duration: (?P<hours>\d+):(?P<minutes>\d+):(?P<seconds>\d+)\.(?P<fraction>\d+)',
+        stderr_text)
     if duration_search:
         hours = int(duration_search.group('hours'))
         minutes = int(duration_search.group('minutes'))
         seconds = int(duration_search.group('seconds'))
-        total_seconds = hours * 3600 + minutes * 60 + seconds
+        fraction = duration_search.group('fraction')
+        total_seconds = hours * 3600 + minutes * 60 + seconds + int(fraction) / (10 ** len(fraction))
         print("音频时长:", total_seconds)
         return total_seconds
     else:
-        print(f"无法从输出中获取音频时长: {result.stderr.decode('utf-8')}")
+        print(f"无法从输出中获取音频时长: {stderr_text}")
         return None
 
 
@@ -330,6 +332,8 @@ class VideoService:
         self.default_duration = DEFAULT_DURATION
         if DEFAULT_DURATION < self.seg_min_duration:
             self.default_duration = self.seg_min_duration
+        os.makedirs(work_output_dir, exist_ok=True)
+        os.makedirs(video_output_dir, exist_ok=True)
 
     def normalize_video(self):
         return_video_list = []
@@ -349,6 +353,7 @@ class VideoService:
                         '-c:v', 'h264',
                         '-t', str(self.default_duration),
                         '-r', str(self.fps),
+                        '-pix_fmt', 'yuv420p',
                         '-vf',
                         f'scale=-1:{self.target_height}:force_original_aspect_ratio=1,crop={self.target_width}:{self.target_height}:(ow-iw)/2:(oh-ih)/2',
                         '-y', output_name]
@@ -361,6 +366,7 @@ class VideoService:
                         '-c:v', 'h264',
                         '-t', str(self.default_duration),
                         '-r', str(self.fps),
+                        '-pix_fmt', 'yuv420p',
                         '-vf',
                         f'scale={self.target_width}:-1:force_original_aspect_ratio=1,crop={self.target_width}:{self.target_height}:(ow-iw)/2:(oh-ih)/2',
                         '-y', output_name]

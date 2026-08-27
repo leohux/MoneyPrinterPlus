@@ -66,6 +66,16 @@ def save_last_published_file_name(filename):
     write_to_file(filename, last_published_file_name)
 
 def publish_file():
+    ensure_keys = [
+        "video_publish_enable_douyin",
+        "video_publish_enable_kuaishou",
+        "video_publish_enable_xiaohongshu",
+        "video_publish_enable_shipinhao",
+        "video_publish_enable_bilibili",
+    ]
+    if not any(st.session_state.get(k) for k in ensure_keys):
+        st.toast("未勾选任何发布平台，请先打开「批量视频自动发布」页并勾选平台", icon="⚠️")
+        return
     driver = init_driver()
     video_file = get_must_session_option('video_publish_content_file', "请选择要发布的视频文件")
     text_file = get_must_session_option('video_publish_content_text', "请选择要发布的内容文件")

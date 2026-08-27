@@ -165,6 +165,8 @@ class VideoMergeService:
         self.video_transition_effect_type = st.session_state["video_transition_effect_type"]
         self.video_transition_effect_value = st.session_state["video_transition_effect_value"]
         self.default_duration = DEFAULT_DURATION
+        os.makedirs(work_output_dir, exist_ok=True)
+        os.makedirs(video_output_dir, exist_ok=True)
 
     def normalize_video(self):
         return_video_list = []
@@ -184,7 +186,8 @@ class VideoMergeService:
                         '-t', str(self.default_duration),
                         '-r', str(self.fps),
                         '-vf',
-                        f'scale=-1:{self.target_height}:force_original_aspect_ratio=1,crop={self.target_width}:{self.target_height}:(ow-iw)/2:(oh-ih)/2'
+                        f'scale=-1:{self.target_height}:force_original_aspect_ratio=1,crop={self.target_width}:{self.target_height}:(ow-iw)/2:(oh-ih)/2',
+                        '-pix_fmt', 'yuv420p',
                         '-y', output_name]
                 else:
                     ffmpeg_cmd = [
@@ -195,7 +198,8 @@ class VideoMergeService:
                         '-t', str(self.default_duration),
                         '-r', str(self.fps),
                         '-vf',
-                        f'scale={self.target_width}:-1:force_original_aspect_ratio=1,crop={self.target_width}:{self.target_height}:(ow-iw)/2:(oh-ih)/2'
+                        f'scale={self.target_width}:-1:force_original_aspect_ratio=1,crop={self.target_width}:{self.target_height}:(ow-iw)/2:(oh-ih)/2',
+                        '-pix_fmt', 'yuv420p',
                         '-y', output_name]
                 print(" ".join(ffmpeg_cmd))
                 subprocess.run(ffmpeg_cmd, check=True, capture_output=True)

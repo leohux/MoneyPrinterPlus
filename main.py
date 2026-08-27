@@ -22,10 +22,11 @@
 #
 
 import os
+import shutil
 
 import streamlit as st
 
-from config.config import my_config, audio_voices_azure, audio_voices_ali, audio_voices_tencent
+from config.config import my_config, audio_voices_azure, audio_voices_ali, audio_voices_tencent, save_config, test_config
 from services.audio.alitts_service import AliAudioService
 from services.audio.azure_service import AzureAudioService
 from services.audio.chattts_service import ChatTTSAudioService
@@ -43,6 +44,7 @@ from services.llm.llm_provider import get_llm_provider
 from services.llm.ollama_service import OllamaService
 from services.llm.openai_service import MyOpenAIService
 from services.llm.tongyi_service import MyTongyiService
+from services.publisher.publish_video import publish_file
 from services.resource.pexels_service import PexelsService
 from services.resource.pixabay_service import PixabayService
 from services.sd.sd_service import SDService
@@ -61,6 +63,8 @@ script_dir = os.path.dirname(script_path)
 # 音频输出目录
 audio_output_dir = os.path.join(script_dir, "./work")
 audio_output_dir = os.path.abspath(audio_output_dir)
+# 默认成片/发布目录
+final_output_dir = os.path.abspath(os.path.join(script_dir, "./final"))
 
 
 def get_audio_voices():
@@ -337,6 +341,21 @@ def main_generate_ai_video(video_generator):
                               alignment=alignment)
                 print("final file with subtitle:", video_file)
             st.session_state["result_video_file"] = video_file
+
+            # 导出发布素材（视频+文案），并可选择立即多平台发布
+            dest_video, text_path = export_video_for_publish(video_file)
+            if dest_video:
+                st.write(f"已导出发布素材: {os.path.basename(dest_video)}")
+            if st.session_state.get("auto_publish_after_generate"):
+                st.write("开始多平台自动发布...")
+                ensure_publish_session()
+                try:
+                    publish_file()
+                    st.write("多平台发布任务已执行")
+                except Exception as e:
+                    print("auto publish error:", e)
+                    st.warning(f"自动发布失败（请确认浏览器调试模式已开启，并在发布页填写驱动路径）: {e}")
+
             status.update(label=tr("Generate Video completed!"), state="complete", expanded=False)
 
 
@@ -404,17 +423,154 @@ def main_generate_ai_video_for_mix(video_generator):
             status.update(label=tr("Generate Video completed!"), state="complete", expanded=False)
 
 
+def ensure_publish_session():
+    """从配置补齐发布页 session，避免未打开过发布页时一键发布无效。"""
+    test_config(my_config, "publisher")
+    pub = my_config.get("publisher") or {}
+    if "video_publish_driver_type" not in st.session_state:
+        st.session_state["video_publish_driver_type"] = pub.get("driver_type") or "chrome"
+    if not st.session_state.get("video_publish_driver_location"):
+        st.session_state["video_publish_driver_location"] = pub.get("driver_location") or ""
+    if not st.session_state.get("video_publish_debugger_address"):
+        st.session_state["video_publish_debugger_address"] = "127.0.0.1:9222"
+    if "video_publish_auto_publish" not in st.session_state:
+        st.session_state["video_publish_auto_publish"] = pub.get("auto_publish", True)
+    if "video_publish_use_common_config" not in st.session_state:
+        st.session_state["video_publish_use_common_config"] = pub.get("common", {}).get("enable", True)
+
+    for site in ["douyin", "kuaishou", "xiaohongshu", "shipinhao", "bilibili"]:
+        key = f"video_publish_enable_{site}"
+        if key not in st.session_state:
+            st.session_state[key] = pub.get(site, {}).get("enable", True)
+
+
+def export_video_for_publish(video_file):
+    """
+    将成片复制到发布目录，并生成同名 txt（首行标题，其余正文），
+    供多平台自动发布页使用。
+    """
+    if not video_file or not os.path.exists(video_file):
+        return None, None
+
+    ensure_publish_session()
+    test_config(my_config, "publisher")
+    publish_dir = st.session_state.get("video_publish_content_dir") \
+                  or my_config.get("publisher", {}).get("content_location") \
+                  or final_output_dir
+    if not publish_dir:
+        publish_dir = final_output_dir
+    os.makedirs(publish_dir, exist_ok=True)
+
+    # 持久化发布目录，方便发布页默认读取
+    my_config['publisher']['content_location'] = publish_dir
+    save_config()
+    st.session_state["video_publish_content_dir"] = publish_dir
+
+    dest_video = os.path.join(publish_dir, os.path.basename(video_file))
+    if os.path.abspath(video_file) != os.path.abspath(dest_video):
+        shutil.copy2(video_file, dest_video)
+
+    title = (st.session_state.get("video_subject") or "AI短视频").strip()
+    content = (st.session_state.get("video_content") or "").strip()
+    text_path = os.path.splitext(dest_video)[0] + ".txt"
+    with open(text_path, "w", encoding="utf-8") as f:
+        f.write(title + "\n")
+        f.write(content + "\n")
+
+    st.session_state["publish_video_file"] = dest_video
+    st.session_state["publish_text_file"] = text_path
+    st.session_state["video_publish_content_file"] = dest_video
+    st.session_state["video_publish_content_text"] = text_path
+    print("export for publish:", dest_video, text_path)
+    return dest_video, text_path
+
+
 def main_generate_ai_video_from_img(video_generator):
+    """Stable Diffusion 生图 → 配音 → 合成短视频 → 导出发布素材。"""
     print("main_generate_ai_video_from_img begin:")
     with video_generator:
         st_area = st.status(tr("Generate Video in process..."), expanded=True)
         with st_area as status:
-            sd_service = SDService()
-            video_content = st.session_state.get('video_content')
-            video_list, audio_list, text_list = sd_service.sd_get_video_list(video_content)
-            pass
+            video_content = get_must_session_option("video_content", "请先生成或填写视频文案")
+            if video_content is None:
+                return
 
-    pass
+            st.write(tr("Generate Video Dubbing..."))
+            main_generate_video_dubbing()
+            audio_file = get_must_session_option("audio_output_file", "请先生成配音文件")
+            if audio_file is None:
+                return
+
+            st.write(tr("Generate Video subtitles..."))
+            main_generate_subtitle()
+
+            st.write("Stable Diffusion 生图中...")
+            sd_service = SDService()
+            image_list, text_list = sd_service.sd_get_video_list(video_content)
+            st.session_state["return_videos"] = image_list
+            st.session_state["sd_text_list"] = text_list
+            print("SD images:", image_list)
+
+            st.write(tr("Video normalize..."))
+            video_service = VideoService(image_list, audio_file)
+
+            # 按配音时长均分每张图的展示时长（含转场重叠）
+            audio_length = get_audio_duration(audio_file)
+            n = len(image_list)
+            if audio_length and n > 0:
+                if video_service.enable_video_transition_effect and n > 1:
+                    transition = float(video_service.video_transition_effect_duration or 1)
+                    per_image = (float(audio_length) + (n - 1) * transition) / n
+                else:
+                    per_image = float(audio_length) / n
+                video_service.default_duration = max(1.0, per_image)
+                print("SD image duration:", video_service.default_duration)
+
+            video_service.normalize_video()
+            st.write(tr("Generate Video..."))
+            video_file = video_service.generate_video_with_audio()
+            print("final file without subtitle:", video_file)
+
+            enable_subtitles = st.session_state.get("enable_subtitles")
+            if enable_subtitles:
+                st.write(tr("Add Subtitles..."))
+                subtitle_file = get_must_session_option('captioning_output', "请先生成字幕文件")
+                if subtitle_file is None:
+                    return
+
+                font_name = st.session_state.get('subtitle_font')
+                font_size = st.session_state.get('subtitle_font_size')
+                primary_colour = st.session_state.get('subtitle_color')
+                outline_colour = st.session_state.get('subtitle_border_color')
+                outline = st.session_state.get('subtitle_border_width')
+                alignment = st.session_state.get('subtitle_position')
+                add_subtitles(video_file, subtitle_file,
+                              font_name=font_name,
+                              font_size=font_size,
+                              primary_colour=primary_colour,
+                              outline_colour=outline_colour,
+                              outline=outline,
+                              alignment=alignment)
+                print("final file with subtitle:", video_file)
+
+            st.session_state["result_video_file"] = video_file
+
+            st.write("导出发布素材...")
+            dest_video, text_path = export_video_for_publish(video_file)
+            if dest_video:
+                st.write(f"已导出: {os.path.basename(dest_video)} / {os.path.basename(text_path)}")
+
+            if st.session_state.get("auto_publish_after_generate"):
+                st.write("开始多平台自动发布...")
+                ensure_publish_session()
+                try:
+                    publish_file()
+                    st.write("多平台发布任务已执行")
+                except Exception as e:
+                    print("auto publish error:", e)
+                    st.warning(f"自动发布失败（请确认浏览器调试模式已开启，并在发布页填写驱动路径）: {e}")
+
+            status.update(label=tr("Generate Video completed!"), state="complete", expanded=False)
 
 
 def main_generate_ai_video_for_merge(video_generator):

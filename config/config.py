@@ -29,7 +29,7 @@ import yaml
 
 from tools.file_utils import read_yaml, save_yaml
 
-app_title = "AI搞钱工具"
+app_title = "MoneyPrinterPlus 优化版"
 
 local_audio_tts_providers = ['chatTTS', 'GPTSoVITS', 'CosyVoice']
 local_audio_recognition_providers = ['fasterwhisper', 'sensevoice']
