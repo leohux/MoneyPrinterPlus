@@ -79,6 +79,7 @@
     - [基本配置](#基本配置)
     
   - [1. AI视频](#1-ai视频)
+    - [Stable Diffusion 生图成片](#stable-diffusion-生图成片)
   
   - [2. 批量视频混剪](#2-批量视频混剪)
   
@@ -164,7 +165,7 @@
 
 # 更新预告
 
-* 准备接入stable diffusion和comfyUI， OOOOO，太牛了！
+* 本仓库已打通 stable diffusion 生图成片（见下方使用说明）；comfyUI 仍待接入。
 * 新增对接cosyvoice语言生成和sensevoice字幕生成。 
 * 已经支持GPTsoVITS本地语音模型啦,教程[再升级!MoneyPrinterPlus集成GPT_SoVITS](https://mp.weixin.qq.com/s/7jdNLemItcJJUhz4OsjlzQ)
 * 已经支持本地语音识别模型fasterwhisper, 教程[fasterWhisper和MoneyPrinterPlus无缝集成](https://mp.weixin.qq.com/s/dSZjpfqUKBz3PyAOYvJKGw)。 可关注我公众号获得最新进度。
@@ -326,8 +327,14 @@ bash start.sh
 
 * pexels:  [www.pexels.com](https://www.pexels.com/)  **Pexels** 是世界上著名的免费图片，视频素材网站。
 * pixabay: [pixabay.com](https://pixabay.com/) 
+* **stableDiffusion**：本机 [Stable Diffusion WebUI](https://github.com/AUTOMATIC1111/stable-diffusion-webui)（AI 生图，再合成短视频）
 
-大家需要到对应的网站上注册一个key来实现API调用。
+使用 pexels / pixabay 时，大家需要到对应的网站上注册一个key来实现API调用。
+
+使用 **stableDiffusion** 时，需要本机已启动 WebUI，并开启 API。基本配置里填写：
+
+* Stable Diffusion API Server Address：例如 `http://127.0.0.1:7860`（程序会自动补全 `/sdapi/v1`）
+* 用户名 / 密码：若 WebUI 开了登录再填，没有可不填
 
 >  后续会陆续添加其他资源库。如（[videvo.net](https://www.videvo.net)，[videezy.com](https://www.videezy.com) 等）
 >
@@ -449,9 +456,71 @@ DeepSeek API获取地址: https://www.deepseek.com/
 
 ![image-20240612141532280](https://flydean-1301049335.cos.ap-guangzhou.myqcloud.com/img/202406121415214.png)
 
+> 上面这套流程默认使用 pexels / pixabay 在线素材。若资源库选成 **stableDiffusion**，则会走下面的「AI 生图成片」流程。
 
+### Stable Diffusion 生图成片
 
+本仓库已打通 **Stable Diffusion → 配音 → 合成短视频** 全流程。适合不想依赖在线素材库、希望画面更贴合文案的场景。
 
+#### 工作原理
+
+1. 大模型根据主题生成视频文案  
+2. 文案按句子/段落拆分  
+3. 每一段再由大模型改写成英文 SD prompt  
+4. 调用本机 WebUI 的 txt2img 接口逐张生图并保存到 `work/`  
+5. 按配音总时长均分每张图的展示时间，再拼接转场、配音、BGM、字幕  
+6. 成片输出到 `final/`，并自动写出同名 `.txt`（第一行标题，后面正文），方便多平台发布  
+
+#### 前提条件
+
+1. 已安装并启动 [Automatic1111 Stable Diffusion WebUI](https://github.com/AUTOMATIC1111/stable-diffusion-webui)  
+2. 启动参数加上 `--api`（必须），例如：
+
+```bash
+webui-user.bat
+# 或在 webui-user.bat 的 COMMANDLINE_ARGS 中加入 --api
+```
+
+3. 浏览器能打开 `http://127.0.0.1:7860`，并能正常出图  
+4. 本项目「基本配置」→ 资源库选 **stableDiffusion**，地址填 `http://127.0.0.1:7860`  
+5. LLM、配音（云端或本地 TTS）已配置好  
+
+#### 页面参数说明
+
+进入 **AI视频 / 自动短视频生成器** 后，资源区会出现 SD 参数：
+
+| 参数 | 建议 | 说明 |
+|------|------|------|
+| Check Point | 你本机已下载的模型 | 会切换 WebUI 当前模型 |
+| Width / Height | 竖屏常用 `720 × 1280` | 需能被 64 整除 |
+| Seed | `-1` 随机；固定数字可复现 | |
+| Sampler / Schedule | 用 WebUI 读到的列表即可 | 连不上 WebUI 时会显示占位提示 |
+| Steps | 一般 `20` | 越大越慢、细节通常更好 |
+| CFG Scale | 建议 `7` 左右 | 原界面曾误标为 0~1，本仓库已修正为常见范围 |
+| Negative Prompt | 可填 blurry, low quality 等 | 抑制糊图、畸形、水印 |
+
+#### 操作步骤
+
+1. 基本配置：资源库选 `stableDiffusion`，填好 WebUI 地址  
+2. AI视频页：填写主题 → 点「生成视频文案」（或手动改文案）  
+3. 配好 TTS、字幕、背景音乐、分辨率等（与普通 AI 视频相同）  
+4. 在资源区确认模型、宽高、步数、CFG  
+5. 点击「生成视频」  
+
+进度大致为：配音 → 字幕识别 → **Stable Diffusion 生图** → 归一化 → 合成 → 加字幕 → 导出发布素材。
+
+可选：
+
+* 勾选 **生成完成后自动发布到多平台**  
+* 或成片后点 **一键发布到多平台**（需已配置浏览器调试模式并登录各平台）
+
+#### 注意事项
+
+* 文案越长，分段越多，生图次数越多，耗时越长；可先用「60字以内」试跑  
+* 图片会按配音时长均分；段数太少时单张停留会偏长  
+* WebUI 未启动或未开 API 时，页面会提示无法连接，不会直接崩溃  
+* 防火墙不要拦截本机 `7860` 端口  
+* 生成的中间图在 `work/`，成片在 `final/`
 
 ## 2. 批量视频混剪
 
