@@ -35,6 +35,10 @@ from services.publisher.douyin_publisher import douyin_publisher
 from services.publisher.kuaishou_publisher import kuaishou_publisher
 from services.publisher.shipinhao_publisher import shipinhao_publisher
 from services.publisher.bilibili_publisher import bilibili_publisher
+from services.publisher.tiktok_publisher import tiktok_publisher
+from services.publisher.facebook_publisher import facebook_publisher
+from services.publisher.youtube_publisher import youtube_publisher
+from services.publisher.instagram_publisher import instagram_publisher
 from tools.file_utils import write_to_file, list_files, read_head
 from tools.utils import get_must_session_option
 
@@ -45,6 +49,10 @@ all_sites = ['xiaohongshu',
              'kuaishou',
              'shipinhao',
              'bilibili',
+             'tiktok',
+             'facebook',
+             'youtube',
+             'instagram',
              ]
 
 
@@ -66,33 +74,16 @@ def save_last_published_file_name(filename):
     write_to_file(filename, last_published_file_name)
 
 def publish_file():
-    ensure_keys = [
-        "video_publish_enable_douyin",
-        "video_publish_enable_kuaishou",
-        "video_publish_enable_xiaohongshu",
-        "video_publish_enable_shipinhao",
-        "video_publish_enable_bilibili",
-    ]
+    ensure_keys = [f"video_publish_enable_{site}" for site in all_sites]
     if not any(st.session_state.get(k) for k in ensure_keys):
         st.toast("未勾选任何发布平台，请先打开「批量视频自动发布」页并勾选平台", icon="⚠️")
         return
     driver = init_driver()
     video_file = get_must_session_option('video_publish_content_file', "请选择要发布的视频文件")
     text_file = get_must_session_option('video_publish_content_text', "请选择要发布的内容文件")
-    if st.session_state.get("video_publish_enable_douyin"):
-        publish_to_platform('douyin', driver, video_file, text_file)
-
-    if st.session_state.get("video_publish_enable_kuaishou"):
-        publish_to_platform('kuaishou', driver, video_file, text_file)
-
-    if st.session_state.get("video_publish_enable_xiaohongshu"):
-        publish_to_platform('xiaohongshu', driver, video_file, text_file)
-
-    if st.session_state.get("video_publish_enable_shipinhao"):
-        publish_to_platform('shipinhao', driver, video_file, text_file)
-        
-    if st.session_state.get("video_publish_enable_bilibili"):
-        publish_to_platform('bilibili', driver, video_file, text_file)
+    for site in all_sites:
+        if st.session_state.get(f"video_publish_enable_{site}"):
+            publish_to_platform(site, driver, video_file, text_file)
     
 
 def publish_all():
@@ -138,35 +129,37 @@ def publish_all():
 
         while True:
             print("选择你要发布的平台:\n")
-            print("1. 全部(小红书,抖音,快手,视频号,B站)")
+            print("1. 全部(国内+TikTok/Facebook/YouTube/Instagram)")
             print("2. 小红书")
             print("3. 抖音")
             print("4. 快手")
             print("5. 视频号")
             print("6. B站")
+            print("7. TikTok")
+            print("8. Facebook")
+            print("9. YouTube")
+            print("10. Instagram")
             print("0. 退出")
 
             choice = input("\n请选择: ")
             print("")
+            choice_map = {
+                "2": "xiaohongshu",
+                "3": "douyin",
+                "4": "kuaishou",
+                "5": "shipinhao",
+                "6": "bilibili",
+                "7": "tiktok",
+                "8": "facebook",
+                "9": "youtube",
+                "10": "instagram",
+            }
             for file_path, text_path in zip(file_path_list, text_path_list):
                 if choice == "1":
-                    publish_to_platform('xiaohongshu', driver, file_path, text_path)
-                    publish_to_platform('douyin', driver, file_path, text_path)
-                    publish_to_platform('kuaishou', driver, file_path, text_path)
-                    publish_to_platform('shipinhao', driver, file_path, text_path)
-                    publish_to_platform('bilibili', driver, file_path, text_path)
-                elif choice == "2":
-                    publish_to_platform('xiaohongshu', driver, file_path, text_path)
-                elif choice == "3":
-                    publish_to_platform('douyin', driver, file_path, text_path)
-
-                elif choice == "4":
-                    publish_to_platform('kuaishou', driver, file_path, text_path)
-
-                elif choice == "5":
-                    publish_to_platform('shipinhao', driver, file_path, text_path)
-                elif choice == "6":
-                    publish_to_platform('bilibili', driver, file_path, text_path)
+                    for site in all_sites:
+                        publish_to_platform(site, driver, file_path, text_path)
+                elif choice in choice_map:
+                    publish_to_platform(choice_map[choice], driver, file_path, text_path)
                 else:
                     break
             if choice == "0":

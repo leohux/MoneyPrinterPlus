@@ -469,5 +469,5 @@ if result_video_file:
         t.start()
         st.toast("已启动多平台发布，请查看浏览器窗口", icon="🚀")
 
-    st.button(label="一键发布到多平台（抖音/快手/小红书/视频号/B站）", type="primary",
+    st.button(label="一键发布到多平台（国内+TikTok/Facebook/YouTube/Instagram）", type="primary",
               on_click=start_publish_now)

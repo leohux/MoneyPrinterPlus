@@ -30,6 +30,31 @@ import yaml
 from tools.file_utils import read_yaml, save_yaml
 
 app_title = "MoneyPrinterPlus 优化版"
+app_description = (
+    "MoneyPrinterPlus 优化版：AI 一键成片/混剪/合并，Stable Diffusion 生图合成短视频，"
+    "Selenium 自动发布至抖音、快手、小红书、视频号、B站、TikTok、Facebook Reels、YouTube、Instagram。"
+    "支持 OpenAI/Ollama/ChatTTS/GPT-SoVITS 等。"
+)
+app_about = """MoneyPrinterPlus 优化版（基于 ddean2009/MoneyPrinterPlus）
+
+【核心功能】
+· AI 一键成片：大模型写文案 → 配音 → 素材检索或 SD 生图 → 合成短视频 + 字幕
+· 批量混剪 / 视频合并：本地素材文件夹批量产出不重复短视频
+· Stable Diffusion 生图成片：文案分段 → LLM 写 prompt → WebUI 生图 → 按配音时长合成
+· 成片自动导出 .mp4 + .txt，生成页可一键多平台发布
+
+【自动发布平台】
+国内：抖音、快手、小红书、视频号、B站
+国外：TikTok、Facebook Reels、YouTube、Instagram
+（Chrome/Firefox 调试模式 + 已登录账号，Selenium 模拟上传）
+
+【模型与服务】
+LLM：OpenAI、Azure、Kimi、通义、DeepSeek、Ollama 等
+配音：Azure/阿里云/腾讯云，本地 ChatTTS、GPT-SoVITS、CosyVoice
+字幕：云端 ASR、faster-whisper、SenseVoice
+
+仓库：https://github.com/leohux/MoneyPrinterPlus
+原作：https://github.com/ddean2009/MoneyPrinterPlus"""
 
 local_audio_tts_providers = ['chatTTS', 'GPTSoVITS', 'CosyVoice']
 local_audio_recognition_providers = ['fasterwhisper', 'sensevoice']
@@ -277,6 +302,10 @@ shipinhao_site = "https://channels.weixin.qq.com/platform/post/create"
 kuaishou_site = "https://cp.kuaishou.com/article/publish/video"
 xiaohongshu_site = "https://creator.xiaohongshu.com/publish/publish?source=official"
 bilibili_site = "https://member.bilibili.com/platform/upload/video/frame"
+tiktok_site = "https://www.tiktok.com/tiktokstudio/upload?from=web"
+facebook_site = "https://www.facebook.com/reel/create"
+youtube_site = "https://www.youtube.com/upload"
+instagram_site = "https://www.instagram.com/"
 
 # 获取当前脚本的绝对路径
 script_path = os.path.abspath(__file__)

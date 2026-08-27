@@ -1,11 +1,3 @@
-'''
-Author: chenpeng 115522593@qq.com
-Date: 2025-01-22 10:04:50
-LastEditors: chenpeng 115522593@qq.com
-LastEditTime: 2025-01-24 14:00:57
-FilePath: /MoneyPrinterPlus/pages/common.py
-Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
-'''
 #  Copyright © [2024] 程序那些事
 #
 #  All rights reserved. This software and associated documentation files (the "Software") are provided for personal and educational use only. Commercial use of the Software is strictly prohibited unless explicit permission is obtained from the author.
@@ -29,27 +21,59 @@ Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查�
 #
 #
 
-import streamlit as st
+import time
 
-from config.config import app_title, app_about
+from config.config import facebook_site
+from services.publisher.publisher_helpers import (
+    build_title_and_caption,
+    find_first,
+    maybe_publish,
+    open_new_tab,
+    paste_into,
+    try_click_texts,
+    upload_via_file_input,
+)
 
 
-def common_ui():
-    st.set_page_config(page_title=app_title,
-                       page_icon=":pretzel:",
-                       layout="wide",
-                       initial_sidebar_state="auto",
-                       menu_items={
-                           'Report a Bug': "https://github.com/leohux/MoneyPrinterPlus/issues",
-                           'About': app_about,
-                           'Get help': "https://github.com/leohux/MoneyPrinterPlus"
-                       })
+def facebook_publisher(driver, video_file, text_file):
+    print("facebook publisher start")
+    open_new_tab(driver, facebook_site)
+    upload_via_file_input(driver, video_file)
+    time.sleep(8)
 
-    st.sidebar.page_link("gui.py", label=tr("Base Config"))
-    st.sidebar.page_link("pages/01_auto_video.py", label=tr("Generate Video"))
-    st.sidebar.page_link("pages/02_mix_video.py", label=tr("Mix Video"))
-    st.sidebar.page_link("pages/02_merge_video.py", label=tr("Merge Video"))
-    st.sidebar.page_link("pages/03_auto_publish.py", label=tr("Video Auto Publish"))
+    try_click_texts(driver, ["Next", "下一步", "继续", "Continue"], timeout=15)
+    time.sleep(2)
 
-    with st.sidebar:
-        st.markdown('---')
+    _, _, _, caption = build_title_and_caption("facebook", text_file, title_limit=220)
+    try:
+        editor = find_first(
+            driver,
+            [
+                '//div[@role="textbox" and @contenteditable="true"]',
+                '//div[@contenteditable="true" and @role="textbox"]',
+                '//div[contains(@aria-label,"Describe")]',
+                '//div[contains(@aria-label,"描述")]',
+                '//div[contains(@aria-label,"Write a caption")]',
+                '//div[@contenteditable="true"]',
+            ],
+            timeout=20,
+        )
+        paste_into(driver, editor, caption)
+        time.sleep(1)
+    except Exception as e:
+        print("facebook caption skip:", e)
+
+    try_click_texts(driver, ["Next", "下一步", "继续", "Continue"], timeout=8)
+    time.sleep(1)
+    maybe_publish(
+        driver,
+        [
+            '//div[@aria-label="Share"]',
+            '//div[@aria-label="分享"]',
+            '//div[@aria-label="Publish"]',
+            '//div[@aria-label="发布"]',
+            '//span[normalize-space()="Share"]/ancestor::*[@role="button"][1]',
+            '//span[normalize-space()="分享"]/ancestor::*[@role="button"][1]',
+        ],
+    )
+    print("facebook publisher done")

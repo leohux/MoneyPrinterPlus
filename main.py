@@ -442,6 +442,10 @@ def ensure_publish_session():
         key = f"video_publish_enable_{site}"
         if key not in st.session_state:
             st.session_state[key] = pub.get(site, {}).get("enable", True)
+    for site in ["tiktok", "facebook", "youtube", "instagram"]:
+        key = f"video_publish_enable_{site}"
+        if key not in st.session_state:
+            st.session_state[key] = pub.get(site, {}).get("enable", False)
 
 
 def export_video_for_publish(video_file):

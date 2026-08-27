@@ -104,4 +104,20 @@ publisher:
     original: False
     title_prefix: 标题前缀
     collection: 集合名称
+  tiktok:
+    enable: False
+    title_prefix: ""
+    collection: ""
+  facebook:
+    enable: False
+    title_prefix: ""
+    collection: ""
+  youtube:
+    enable: False
+    title_prefix: ""
+    collection: ""
+  instagram:
+    enable: False
+    title_prefix: ""
+    collection: ""
 

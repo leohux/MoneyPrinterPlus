@@ -1,11 +1,3 @@
-'''
-Author: chenpeng 115522593@qq.com
-Date: 2025-01-22 10:04:50
-LastEditors: chenpeng 115522593@qq.com
-LastEditTime: 2025-01-24 14:00:57
-FilePath: /MoneyPrinterPlus/pages/common.py
-Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
-'''
 #  Copyright © [2024] 程序那些事
 #
 #  All rights reserved. This software and associated documentation files (the "Software") are provided for personal and educational use only. Commercial use of the Software is strictly prohibited unless explicit permission is obtained from the author.
@@ -29,27 +21,47 @@ Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查�
 #
 #
 
-import streamlit as st
+import time
 
-from config.config import app_title, app_about
+from config.config import tiktok_site
+from services.publisher.publisher_helpers import (
+    build_title_and_caption,
+    find_first,
+    maybe_publish,
+    open_new_tab,
+    paste_into,
+    upload_via_file_input,
+)
 
 
-def common_ui():
-    st.set_page_config(page_title=app_title,
-                       page_icon=":pretzel:",
-                       layout="wide",
-                       initial_sidebar_state="auto",
-                       menu_items={
-                           'Report a Bug': "https://github.com/leohux/MoneyPrinterPlus/issues",
-                           'About': app_about,
-                           'Get help': "https://github.com/leohux/MoneyPrinterPlus"
-                       })
+def tiktok_publisher(driver, video_file, text_file):
+    print("tiktok publisher start")
+    open_new_tab(driver, tiktok_site)
+    upload_via_file_input(driver, video_file)
+    time.sleep(6)
 
-    st.sidebar.page_link("gui.py", label=tr("Base Config"))
-    st.sidebar.page_link("pages/01_auto_video.py", label=tr("Generate Video"))
-    st.sidebar.page_link("pages/02_mix_video.py", label=tr("Mix Video"))
-    st.sidebar.page_link("pages/02_merge_video.py", label=tr("Merge Video"))
-    st.sidebar.page_link("pages/03_auto_publish.py", label=tr("Video Auto Publish"))
+    _, _, _, caption = build_title_and_caption("tiktok", text_file, title_limit=150)
+    editor = find_first(
+        driver,
+        [
+            '//div[@data-e2e="caption_container"]//div[@contenteditable="true"]',
+            '//div[contains(@class,"DraftEditor-root")]//div[@contenteditable="true"]',
+            '//div[@contenteditable="true" and @role="textbox"]',
+            '//div[@contenteditable="true"]',
+        ],
+        timeout=50,
+    )
+    paste_into(driver, editor, caption)
+    time.sleep(2)
 
-    with st.sidebar:
-        st.markdown('---')
+    maybe_publish(
+        driver,
+        [
+            '//button[@data-e2e="post_video_button"]',
+            '//button[contains(@class,"btn-post")]',
+            '//div[contains(@class,"btn-post")]',
+            '//button[normalize-space()="Post"]',
+            '//button[normalize-space()="发布"]',
+        ],
+    )
+    print("tiktok publisher done")
